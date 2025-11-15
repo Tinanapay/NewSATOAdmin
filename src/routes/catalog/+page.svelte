@@ -42,17 +42,17 @@ function addEntry() {
 
 
 <div class="catalog-container">
- <h1> ADMIN CATALOG</h1>
+ <h1>ADMIN CATALOG</h1>
 
   <div class="button-group">
 
- <button class="logout-button" class:active={activeTab === "logout"}
+ <button class="logout-button"class:active={activeTab === "logout"}
  on:click= {() => goTo("/")}>
- LOG OUT</button>
+  LOG OUT</button>
 
- <button class="catalog-button" class:active={activeTab === "catalog"}
- on:click= {() => goTo("catalog")}>
- catalog</button>
+ <button class="library-button" class:active={activeTab === "library"}
+ on:click= {() => goTo("library")}>
+ LIBRARY</button>
 
 
  <button class="catalog-button" class:active={activeTab === "catalog"}
@@ -77,6 +77,7 @@ function addEntry() {
 </div>
 
 <!--title lng-->
+
 <div class="title">
   <div class="name-title"> Name:</div>
   <div class="description-title"> Description:</div>
@@ -174,7 +175,6 @@ background-color: #000000;
   font-weight: bold;
 }
 
-
 :global(.button-group) {
   display: flex;
   gap: 10px;
@@ -183,8 +183,8 @@ background-color: #000000;
   height: 50px;
 }
 
-:global(.catalog-button){
-background-color: #CF8C44;
+:global(.library-button){
+background-color: #3E92B5;
 color: #fff;
 border-radius: 10px;
 max-width: 100px;
@@ -194,7 +194,7 @@ border-width: 5px;
 }
 
 :global(.catalog-button){
-background-color: #3E92B5;
+background-color:  #CF8C44;
 color: #fff;
 border-radius: 10px;
 max-width: 100px;
@@ -216,35 +216,32 @@ border-width: 5px;
 .catalog-container {
   background-color: #000000;
   height: 80px;
-  width: auto;               
-  max-width: 2000px;         
-  margin: 10px 15px 0 15px; 
+  width: auto;               /* let width be determined by margins */
+  max-width: 2000px;         /* optional: limit maximum width */
+  margin: 10px 15px 0 15px;  /* top 10px, left/right 15px, bottom 0 */
   display: flex;
   justify-content: flex-start;
   align-items: center;
-  padding: 0 20px;          
+  padding: 0 20px;           /* space inside header for text */
   position: fixed;
   top: 0;
-  left: 0;                   
-  right: 0;                   
+  left: 0;                    /* stays at top-left */
+  right: 0;                   /* ensures it stops at right margin */
   z-index: 1000;
   color: #CF8C44;
   font-size: 24px;
   font-weight: bold;
   border-radius: 20px;
   border: 1px solid #3E92B5;
-     word-wrap: break-word;  
-white-space: normal;
 }
+
 
 .catalog-component-box {
      display: flex;
      gap: 10px;
      padding: 20px;
      margin-top: 100px; 
-     height: 50px;
-     word-wrap: break-word;  
-white-space: normal;
+      height: 50px;
 }
 
 .component-name-input{
@@ -256,10 +253,7 @@ background-color: #000000;
 border: 1px solid #3E92B5;
 border-radius: 10px;
 font-size: 16px;
-word-wrap: break-word;  
-white-space: normal;
 }
-
 .description-input {
  flex: 3;
  padding: 6px 10px;
@@ -271,7 +265,7 @@ white-space: normal;
 font-size: 16px;
 }
 
-.add-button, .save_button{
+.add-button,.save_button{
 background-color: #CF8C44;
 color: #fff;
 border-radius: 10px;
@@ -279,9 +273,8 @@ max-width: 500px;
 padding: 6px 10px;
 border: none;
 font-size: 16px; 
-position: justify;
-right: 30px;
 }
+
 
 .edit_button_input{
 background-color: #000000;
@@ -316,6 +309,5 @@ font-size: 16px;
 word-wrap: break-word;  
 white-space: normal;
 }
-
 
 </style>

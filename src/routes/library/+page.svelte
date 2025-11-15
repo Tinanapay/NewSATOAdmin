@@ -174,7 +174,6 @@ background-color: #000000;
   font-weight: bold;
 }
 
-
 :global(.button-group) {
   display: flex;
   gap: 10px;

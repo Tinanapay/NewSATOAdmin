@@ -58,17 +58,17 @@ let activeTab = "/";
 	/* Logo circle floating */
 	.logo-wrapper {
 		position: absolute;
-		top: -70px;
-		background: #162435;
+		top: -160px;
 		border-radius: 50%;
-		padding: 10px;
 		border: 3px solid #1e4b3a;
 		box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+        width: 250px;
+		height: 250px;
 	}
 
 	.logo {
-		width: 120px;
-		height: 120px;
+		width: 250px;
+		height: 250px;
 		border-radius: 50%;
 		object-fit: cover;
 	}
