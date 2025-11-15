@@ -1,17 +1,16 @@
 <script>
+	import { text } from "@sveltejs/kit";
+
   
 let activeTab="library";
+let entries = [];
+let componentName = "";
+let description = "";
+
 
 function goTo(path) { 
   window.location.href = path;
-}
-
-
-let entries = [];
-
-
-let componentName = "";
-let description = "";
+}   
 
 function addEntry() {
   entries = [
@@ -23,7 +22,20 @@ function addEntry() {
 
   componentName = "";
   description = ""; 
+  }
 
+  function editEntry(index){
+    entries[index].editing = true;
+    entries = [...entries]
+  }
+
+  function saveEntry(index){
+  entries[index].editing = false;
+  entries = [...entries];
+}
+
+  function deleteEntry(index){
+    entries = entries.filter ((_, i) => i !== index);
   }
 
 </script>
@@ -51,6 +63,8 @@ function addEntry() {
 
 </div>
 
+<!--  input box ng name and decription para maka type -->  
+
 <div class="library-component-box">
 
  <input type="text" placeholder="Component Name..." class="component-name-input"
@@ -62,17 +76,39 @@ function addEntry() {
 
 </div>
 
+<!--title lng-->
 <div class="title">
   <div class="name-title"> Name:</div>
   <div class="description-title"> Description:</div>
 </div>
 
+<!--entries display and para maedit and madelte ung entries-->
 
-{#each entries as entry}
+{#each entries as entry,i}
 <div class="library-entry-box">
+
+{#if entry.editing}
+
+ <input class="name_edit" bind:value={entry.name}
+ on:input={() => (entries = [...entries])}/>
+
+<textarea class="description_edit" bind:value={entry.description}
+on:input={() => (entries = [...entries])}></textarea>
+
+<button class="save_button" on:click={() => saveEntry(i)}>Save</button>
+
+{:else}
 
   <div class="name-entry">{entry.name}</div>
   <div class="description-entry">{entry.description} </div>
+
+  <button class="edit_button_input" on:click={() => editEntry(i)}>
+    <img src="/write.svg" alt="edit" class="edit" /> </button>
+  
+    <button class="delete_button_input" on:click={() => deleteEntry(i)}>
+    <img src="/delete.svg" alt="delete" class="delete" /> </button>
+
+{/if}
 
 </div>
 {/each}
@@ -197,7 +233,10 @@ border-width: 5px;
   font-weight: bold;
   border-radius: 20px;
   border: 1px solid #3E92B5;
+     word-wrap: break-word;  
+white-space: normal;
 }
+
 .library-component-box {
      display: flex;
      gap: 10px;
@@ -230,12 +269,9 @@ white-space: normal;
  border: 1px solid #3E92B5;
     border-radius: 10px;
 font-size: 16px;
-word-wrap: break-word;  
-white-space: normal;
 }
 
-
-.add-button{
+.add-button, .save_button{
 background-color: #CF8C44;
 color: #fff;
 border-radius: 10px;
@@ -243,5 +279,43 @@ max-width: 500px;
 padding: 6px 10px;
 border: none;
 font-size: 16px; 
+position: justify;
+right: 30px;
 }
+
+.edit_button_input{
+background-color: #000000;
+border-radius: 10px;
+max-width: 500px;
+max-height:70px;
+padding: 6px 10px;
+border: none;
+font-size: 16px; 
+}
+
+.delete_button_input{
+background-color: #000000;
+border-radius: 10px;
+max-width: 500px;
+max-height: 70px;
+padding: 6px 10px;
+border: none;
+font-size: 16px; 
+}
+
+ 
+.name_edit, .description_edit{
+flex: 1;
+max-width: 150px;
+padding: 6px 10px;
+background-color: #000000;
+ color: #CF8C44;
+border: 1px solid #3E92B5;
+border-radius: 10px;
+font-size: 16px;
+word-wrap: break-word;  
+white-space: normal;
+}
+
+
 </style>

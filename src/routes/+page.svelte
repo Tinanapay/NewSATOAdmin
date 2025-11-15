@@ -1,8 +1,8 @@
 <script>
-	/*function loginWithGoogle() {
+	/* function loginWithGoogle() {
 		console.log("Logging in with Google...");
 
-	}*/
+	} */
 
 
 let activeTab = "/";
