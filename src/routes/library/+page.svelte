@@ -1,6 +1,5 @@
 <script>
-import { onMount } from "svelte";
-import {
+import { 
   collection,
   query,
   orderBy,
@@ -11,10 +10,13 @@ import {
   deleteDoc,
   doc
 } from "firebase/firestore";
-import { signOut } from "firebase/auth";
+
+import { signOut, onAuthStateChanged } from "firebase/auth";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+
+import { onMount } from "svelte";
 import DOMPurify from "dompurify";
 import validator from "validator";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 let activeTab = "library";
 let db = null;
@@ -40,7 +42,6 @@ onMount(async () => {
 
     if (!db) { loading = false; return; }
 
-    // Firestore query
     const q = query(collection(db, "components"), orderBy("componentName"));
 
     // Initial fetch
@@ -51,7 +52,7 @@ onMount(async () => {
         const name = data.componentName ?? data.Name ?? data.name ?? "";
         const desc = data.description ?? data.Description ?? "";
         const image_path = data.image_path ?? data.imagePath ?? data.image ?? "";
-        return { id: d.id, name, description: desc, image_path, editing:false, uploading:false };
+        return { id: d.id, name, description: desc, image_path, editing: false, uploading: false };
       });
     } catch {
       entries = [];
@@ -66,20 +67,18 @@ onMount(async () => {
         const name = data.componentName ?? data.Name ?? data.name ?? "";
         const desc = data.description ?? data.Description ?? "";
         const image_path = data.image_path ?? data.imagePath ?? data.image ?? "";
-        return { id: d.id, name, description: desc, image_path, editing:false, uploading:false };
+        return { id: d.id, name, description: desc, image_path, editing: false, uploading: false };
       });
     });
 
     // Auth listener
-    const { onAuthStateChanged } = await import("firebase/auth");
-    const { collection: colFn, getDocs: getDocsFn } = await import("firebase/firestore");
     const unsubAuth = onAuthStateChanged(auth, async user => {
       if (!user) { window.location.href = "/"; return; }
 
       try {
         const email = (user.email || "").trim().toLowerCase();
-        const snap = await getDocsFn(colFn(db, "Admins"));
-        const allowed = snap.docs.some(d => Object.values(d.data()||{}).some(v => String(v||"").trim().toLowerCase() === email));
+        const snap = await getDocs(collection(db, "Admins"));
+        const allowed = snap.docs.some(d => Object.values(d.data() || {}).some(v => String(v || "").trim().toLowerCase() === email));
         if (!allowed) { await auth.signOut(); window.location.href = "/"; }
       } catch (e) { console.error("Auth check failed:", e); }
     });
@@ -98,14 +97,31 @@ onMount(async () => {
 async function addEntry() {
   const name = DOMPurify.sanitize(componentName.trim());
   const desc = DOMPurify.sanitize(description.trim());
-  if (!validator.isLength(name, { min:1 })) { alert("Component name cannot be empty."); return; }
-  if (!db) { alert("Database not ready"); return; }
+
+  if (!validator.isLength(name, { min:1 })) {
+    alert("Component name cannot be empty.");
+    return;
+  }
+  if (!db) {
+    alert("Database not ready");
+    return;
+  }
+
   saving = true;
   try {
-    await addDoc(collection(db, "components"), { componentName: name, description: desc, image_path: "" });
-    componentName = ""; description = "";
-  } catch(e) { alert("Failed to add: " + (e?.message||e)); }
-  finally { saving = false; }
+    await addDoc(collection(db, "components"), {
+      componentName: name,
+      description: desc,
+      image_path: ""
+    });
+
+    componentName = "";
+    description = "";
+  } catch (e) {
+    alert("Failed to add: " + (e?.message || e));
+  } finally {
+    saving = false;
+  }
 }
 
 // Edit
@@ -117,27 +133,27 @@ function editEntry(i) {
 // Upload image
 async function uploadImage(i) {
   const fileInput = document.createElement("input");
-  fileInput.type = "file"; 
+  fileInput.type = "file";
   fileInput.accept = "image/*";
 
   fileInput.onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    entries[i].uploading = true; 
+    entries[i].uploading = true;
     entries = [...entries];
 
     try {
       const storage = getStorage(app);
       const storageRef = ref(storage, `image_path/${Date.now()}_${file.name}`);
+
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
 
       entries[i].image_path = url;
-      entries[i].uploading = false;
-      entries = [...entries];
     } catch (err) {
       console.error("Upload failed:", err);
+    } finally {
       entries[i].uploading = false;
       entries = [...entries];
     }
@@ -154,7 +170,11 @@ async function saveEntry(i) {
 
   saving = true;
   try {
-    await updateDoc(doc(db,"components", e.id), { componentName: e.name, description: e.description, image_path: e.image_path });
+    await updateDoc(doc(db,"components", e.id), { 
+      componentName: e.name, 
+      description: e.description, 
+      image_path: e.image_path 
+    });
     entries[i].editing = false; 
     entries = [...entries];
   } catch(err) { console.error(err); }

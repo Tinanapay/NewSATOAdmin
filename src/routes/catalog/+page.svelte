@@ -1,18 +1,12 @@
 <script>
-import { onMount } from "svelte";
-import {
-  collection,
-  query,
-  orderBy,
-  onSnapshot,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc
+import { 
+  collection, query, orderBy, onSnapshot, getDocs, addDoc, updateDoc, deleteDoc, doc
 } from "firebase/firestore";
-import { signOut } from "firebase/auth";
+
+import { signOut, onAuthStateChanged } from "firebase/auth";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+
+import { onMount } from "svelte";
 import DOMPurify from "dompurify";
 import validator from "validator";
 
@@ -23,15 +17,17 @@ let auth = null;
 let entries = [];
 let componentName = "";
 let discoveredBy = "";
-let discoveryPeriod = "";
+let discoveryYear = "";
 let category = "";
 let saving = false;
 let loading = true;
 
+// Redirect helper
 function goTo(path) {
   if (typeof window !== "undefined") window.location.href = path;
 }
 
+// Initialize Firebase and fetch entries
 onMount(async () => {
   try {
     const mod = await import("$lib/firebase");
@@ -41,30 +37,25 @@ onMount(async () => {
 
     if (!db) { loading = false; return; }
 
-    const q = query(collection(db, "catalog"), orderBy("componentName"));
+    const q = query(collection(db, "catalog"), orderBy("name"));
 
-    // Initial fetch
-    try {
-      const snap = await getDocs(q);
-      entries = snap.docs.map(d => {
-        const data = d.data() || {};
-        return {
-          id: d.id,
-          name: data.componentName ?? "",
-          discoveredBy: data.discoveredBy ?? "",
-          discoveryPeriod: data.discoveryPeriod ?? "",
-          category: data.category ?? "",
-          sym_img: data.sym_img ?? "",
-
-          editing: false,
-          uploading: false
-        };
-      });
-    } catch {
-      entries = [];
-    } finally {
-      loading = false;
-    }
+    // Fetch initial data
+    const snap = await getDocs(q);
+    entries = snap.docs.map(d => {
+      const data = d.data() || {};
+      return {
+        id: d.id,
+        name: data.name ?? "",
+        discovered: data.discovered ?? "",
+        year: data.year ?? "",
+        category: data.category ?? "",
+        sym_img: data.sym_img ?? "",
+        symbol: data.symbol ?? "",
+        editing: false,
+        uploading: false
+      };
+    });
+    loading = false;
 
     // Real-time listener
     const unsub = onSnapshot(q, snap => {
@@ -72,63 +63,62 @@ onMount(async () => {
         const data = d.data() || {};
         return {
           id: d.id,
-          name: data.componentName ?? "",
-          discoveredBy: data.discoveredBy ?? "",
-          discoveryPeriod: data.discoveryPeriod ?? "",
+          name: data.name ?? "",
+          discovered: data.discovered ?? "",
+          year: data.year ?? "",
           category: data.category ?? "",
-          image_path: data.image_path ?? "",
+          sym_img: data.sym_img ?? "",
+          symbol: data.symbol ?? "",
           editing: false,
           uploading: false
         };
       });
     });
 
-    // Auth listener
-    const { onAuthStateChanged } = await import("firebase/auth");
+    // Admin auth check
     const unsubAuth = onAuthStateChanged(auth, async user => {
       if (!user) { window.location.href = "/"; return; }
 
-      try {
-        const email = (user.email || "").trim().toLowerCase();
-        const snap = await getDocs(collection(db, "Admins"));
-        const allowed = snap.docs.some(d => Object.values(d.data() || {}).some(v => String(v || "").trim().toLowerCase() === email));
-        if (!allowed) { await auth.signOut(); window.location.href = "/"; }
-      } catch (e) { console.error("Auth check failed:", e); }
+      const email = (user.email || "").trim().toLowerCase();
+      const snap = await getDocs(collection(db, "Admins"));
+      const allowed = snap.docs.some(d => Object.values(d.data() || {}).some(v => String(v || "").trim().toLowerCase() === email));
+      if (!allowed) { await auth.signOut(); window.location.href = "/"; }
     });
 
-    return () => { 
-      unsub && unsub(); 
-      unsubAuth && unsubAuth(); 
-    };
+    return () => { unsub && unsub(); unsubAuth && unsubAuth(); };
   } catch (e) {
     console.error("Firebase init error:", e);
     loading = false;
   }
 });
 
-// Add component
+// Add new component
 async function addEntry() {
+  const name = DOMPurify.sanitize(componentName.trim());
+  const discovered = DOMPurify.sanitize(discoveredBy.trim());
+  const year = DOMPurify.sanitize(discoveryYear.trim());
+  const cat = DOMPurify.sanitize(category.trim());
 
-const name = componentName.trim();
-const discoverer = discoveredBy.trim();
-const period = discoveryPeriod.trim();
-const cat = category.trim();
-
-  if (!validator.isLength(name, { min: 1 })) { alert("Component name cannot be empty."); return; }
+  if (!validator.isLength(name, { min: 1 })) { 
+    alert("Component name cannot be empty."); 
+    return; 
+  }
   if (!db) { alert("Database not ready"); return; }
 
   saving = true;
   try {
     await addDoc(collection(db, "catalog"), {
-      componentName: name,
-      discoveredBy: discoverer,
-      discoveryPeriod: period,
+      name,
+      discovered,
+      year,
       category: cat,
-      image_path: ""
+      sym_img: "",
+      symbol: ""
     });
-    componentName = discoveredBy = discoveryPeriod = category = "";
-  } catch(e) { alert("Failed to add: " + (e?.message || e)); }
-  finally { saving = false; }
+    componentName = discoveredBy = discoveryYear = category = "";
+  } catch(e) { 
+    alert("Failed to add: " + (e?.message || e)); 
+  } finally { saving = false; }
 }
 
 // Edit entry
@@ -136,6 +126,38 @@ function editEntry(i) {
   entries[i].editing = true;
   entries = [...entries];
 }
+
+// Save edited entry
+async function saveEntry(i) {
+  const e = entries[i];
+  if (!db || !e || !e.id) return;
+
+  saving = true;
+  try {
+    await updateDoc(doc(db, "catalog", e.id), {
+      name: e.name,
+      discovered: e.discovered,
+      year: e.year,
+      category: e.category,
+      sym_img: e.sym_img,
+      symbol: e.symbol
+    });
+    entries[i].editing = false;
+    entries = [...entries];
+  } catch(err) { console.error(err); } 
+  finally { saving = false; }
+}
+
+// Delete entry
+async function deleteEntry(i) {
+  const e = entries[i];
+  if (!db || !e || !e.id) return;
+  if (!confirm("Delete this component?")) return;
+
+  try { await deleteDoc(doc(db,"catalog", e.id)); } 
+  catch(err) { console.error(err); }
+}
+
 // Upload image
 async function uploadImage(i) {
   const fileInput = document.createElement("input");
@@ -156,15 +178,10 @@ async function uploadImage(i) {
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
 
-      // UI
       entries[i].sym_img = url;
       entries = [...entries];
 
-      // Firestore
-      await updateDoc(doc(db, "catalog", entries[i].id), {
-        sym_img: url
-      });
-
+      await updateDoc(doc(db, "catalog", entries[i].id), { sym_img: url });
     } catch (err) {
       console.error("Upload failed:", err);
     } finally {
@@ -176,39 +193,6 @@ async function uploadImage(i) {
   fileInput.click();
 }
 
-
-// Save edited entry
-async function saveEntry(i) {
-  if (!db) return;
-  const e = entries[i];
-  if (!e || !e.id) return;
-
-  saving = true;
-  try {
-    await updateDoc(doc(db, "catalog", e.id), {
-      componentName: e.name,
-      discoveredBy: e.discoveredBy,
-      discoveryPeriod: e.discoveryPeriod,
-      category: e.category,
-      image_path: e.image_path
-    });
-    entries[i].editing = false;
-    entries = [...entries];
-  } catch(err) { console.error(err); }
-  finally { saving = false; }
-}
-
-// Delete entry
-async function deleteEntry(i) {
-  if (!db) return;
-  const e = entries[i];
-  if (!e || !e.id) return;
-  if (!confirm("Delete this component?")) return;
-
-  try { await deleteDoc(doc(db,"catalog", e.id)); }
-  catch(err) { console.error(err); }
-}
-
 // Logout
 function logout() {
   auth && signOut(auth)
@@ -217,21 +201,22 @@ function logout() {
 }
 </script>
 
+<!-- UI -->
 <div class="catalog-container">
  <h1>ADMIN CATALOG</h1>
-  <div class="button-group">
+ <div class="button-group">
    <button class="logout-button" class:active={activeTab === "logout"} on:click={logout}>LOG OUT</button>
    <button class="library-button" class:active={activeTab === "library"} on:click={() => goTo("library")}>LIBRARY</button>
    <button class="catalog-button" class:active={activeTab === "catalog"} on:click={() => goTo("catalog")}>CATALOG</button>
-  </div>
+ </div>
 </div>
 
 <div class="catalog-component-box">
-  <input type="text" placeholder="Component Name..." class="component-name-input" bind:value={componentName}/>
-  <input type="text" placeholder="Discovered by..." class="discovered-input" bind:value={discoveredBy}/>
-  <input type="text" placeholder="Period of discovery..." class="discovery-input" bind:value={discoveryPeriod}/>
-  <input type="text" placeholder="Category..." class="category-input" bind:value={category}/>
-  <button class="add-button" on:click={addEntry}>ADD</button>
+<input type="text" class="component-name-input" placeholder="Component Name..." bind:value={componentName}/>
+<input type="text" class="discovered-input" placeholder="Discovered by..." bind:value={discoveredBy}/>
+<input type="text" class="discovery-input" placeholder="Year of discovery..." bind:value={discoveryYear}/>
+<input type="text" class="category-input" placeholder="Category..." bind:value={category}/>
+<button class="add-button" on:click={addEntry}>ADD</button>
 </div>
 
 <div class="title">
@@ -240,46 +225,37 @@ function logout() {
 </div>
 
 {#each entries as entry, i}
-
   <div class="catalog-entry-box">
-
     {#if entry.editing}
-
-      <input class="name_edit" placeholder="Component Name..." bind:value={entry.name} on:input={() => (entries = [...entries])}/>
-      
-      <input class="discovered_edit" placeholder="Discovered by..." bind:value={entry.discoveredBy} on:input={() => (entries = [...entries])}/>
-     
-      <input class="discovery_edit" placeholder="Period of Discovery..." bind:value={entry.discoveryPeriod} on:input={() => (entries = [...entries])}/>
-      
-      <input class="category_edit" placeholder="Category..." bind:value={entry.category} on:input={() => (entries = [...entries])}/>
-      
-      <button class="save_button" on:click={() => saveEntry(i)}>Save</button>
+<input class="name_edit" placeholder="Component Name..." bind:value={entry.name} on:input={() => (entries=[...entries])}/>
+<input class="discovered_edit" placeholder="Discovered by..." bind:value={entry.discovered} on:input={() => (entries=[...entries])}/>
+<input class="discovery_edit" placeholder="Year..." bind:value={entry.year} on:input={() => (entries=[...entries])}/>
+<input class="category_edit" placeholder="Category..." bind:value={entry.category} on:input={() => (entries=[...entries])}/>
+<button class="save_button" on:click={() => saveEntry(i)}>Save</button>
 
     {:else}
-
       <div class="name-entry">{entry.name}</div>
-
       <div class="description-entry">
-        {#if entry.discoveredBy || entry.discoveryPeriod || entry.category}
-          <div>Discovered by: {entry.discoveredBy}</div>
-          <div>Period of Discovery: {entry.discoveryPeriod}</div>
+        {#if entry.discovered || entry.year || entry.category}
+          <div>Discovered by: {entry.discovered}</div>
+          <div>Year: {entry.year}</div>
           <div>Category: {entry.category}</div>
-
         {/if}
-
       </div>
-
-      <!-- Only show actions when NOT editing -->
       <div class="row-actions">
-        <button class="img_path_input" on:click={() => uploadImage(i)}>
-          <img src="/add.svg" alt="img_path" class="imgpath" />
-        </button>
-        <button class="edit_button_input" on:click={() => editEntry(i)}>
-          <img src="/write.svg" alt="edit" class="edit" />
-        </button>
-        <button class="delete_button_input" on:click={() => deleteEntry(i)}>
-          <img src="/delete.svg" alt="delete" class="delete" />
-        </button>
+<div class="row-actions">
+  <button class="img_path_input" on:click={() => uploadImage(i)}>
+    <img src="/add.svg" alt="Upload" class="icon-btn" />
+  </button>
+  <button class="edit_button_input" on:click={() => editEntry(i)}>
+    <img src="/write.svg" alt="Edit" class="icon-btn" />
+  </button>
+  <button class="delete_button_input" on:click={() => deleteEntry(i)}>
+    <img src="/delete.svg" alt="Delete" class="icon-btn" />
+  </button>
+</div>
+
+
       </div>
     {/if}
   </div>
@@ -470,13 +446,32 @@ function logout() {
   justify-content: center;
   align-items: center;
 }
-.imgpath,
-.edit,
-.delete {
+
+.icon-btn {
+  
+  width: 30px;
+  height: 30px;
+  pointer-events: none; /* So clicks go to the button, not the img */
+}
+.img_path_input,
+.edit_button_input,
+.delete_button_input {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border: solid #3E92B5 2px ;
+  background: #000000;
+  cursor: pointer;
+}
+
+ /*.img_path_input,
+.edit_button_input,
+.delete_button_input {
   width: 30px;
   height: 30px;
 }
-  /*
+  
   .img_path_input{
     background-color: #000000;
     border-radius: 10px;
