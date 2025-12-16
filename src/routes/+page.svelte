@@ -66,7 +66,7 @@ async function loginWithGoogle() {
 
 
     if (allowed) {
-      window.location.href = "/library";
+      window.location.href = "/landingpage";
     } else {
       await signOut(auth);
       error = "Access denied: your account is not an admin.";

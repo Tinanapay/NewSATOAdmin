@@ -1,7 +1,17 @@
 <script>
-import { 
-  collection, query, orderBy, onSnapshot, getDocs, addDoc, updateDoc, deleteDoc, doc
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  doc,
+  setDoc
 } from "firebase/firestore";
+
+let componentId = "";
 
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -9,6 +19,7 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { onMount } from "svelte";
 import DOMPurify from "dompurify";
 import validator from "validator";
+
 
 let activeTab = "catalog";
 let db = null;
@@ -21,6 +32,28 @@ let discoveryYear = "";
 let category = "";
 let saving = false;
 let loading = true;
+
+
+/*no auto id generator
+async function saveEntry(entry) {
+  if (!entry.id) {
+    alert("ID is required meow");
+    return;
+  }
+
+  await setDoc(
+    doc(db, "components", entry.id),
+    {
+      name: entry.name,
+      category: entry.category,
+      symbol: entry.symbol,
+      year: entry.year,
+      img: entry.sym_img
+    }
+  );
+
+}
+*/
 
 // Redirect helper
 function goTo(path) {
@@ -94,32 +127,43 @@ onMount(async () => {
 
 // Add new component
 async function addEntry() {
-  const name = DOMPurify.sanitize(componentName.trim());
+  let id = DOMPurify.sanitize(componentId.trim());
+  id = id.charAt(0).toUpperCase() + id.slice(1).toLowerCase();
+
   const discovered = DOMPurify.sanitize(discoveredBy.trim());
   const year = DOMPurify.sanitize(discoveryYear.trim());
   const cat = DOMPurify.sanitize(category.trim());
 
-  if (!validator.isLength(name, { min: 1 })) { 
-    alert("Component name cannot be empty."); 
+  if (!validator.isLength(id, { min: 1 })) { 
+    alert("Component ID cannot be empty!"); 
     return; 
   }
-  if (!db) { alert("Database not ready"); return; }
+
+  const regex = /^[A-Z][a-z0-9-]*$/;
+  if (!regex.test(id)) {
+    alert("ID must start with a capital letter and contain only letters, numbers, or hyphens!");
+    return;
+  }
 
   saving = true;
   try {
-    await addDoc(collection(db, "catalog"), {
-      name,
+    await setDoc(doc(db, "catalog", id), {
+      name: id,
       discovered,
       year,
       category: cat,
-      sym_img: "",
+      sym_img: newImageUrl,
       symbol: ""
     });
-    componentName = discoveredBy = discoveryYear = category = "";
-  } catch(e) { 
-    alert("Failed to add: " + (e?.message || e)); 
-  } finally { saving = false; }
+
+    componentId = discoveredBy = discoveryYear = category = "";
+  } catch (e) {
+    alert("Failed to add: " + e.message);
+  } finally { 
+    saving = false; 
+  }
 }
+
 
 // Edit entry
 function editEntry(i) {
@@ -128,7 +172,7 @@ function editEntry(i) {
 }
 
 // Save edited entry
-async function saveEntry(i) {
+async function saveEditedEntry(i) {
   const e = entries[i];
   if (!db || !e || !e.id) return;
 
@@ -142,11 +186,16 @@ async function saveEntry(i) {
       sym_img: e.sym_img,
       symbol: e.symbol
     });
+
     entries[i].editing = false;
     entries = [...entries];
-  } catch(err) { console.error(err); } 
-  finally { saving = false; }
+  } catch (err) {
+    console.error(err);
+  } finally {
+    saving = false;
+  }
 }
+
 
 // Delete entry
 async function deleteEntry(i) {
@@ -159,7 +208,9 @@ async function deleteEntry(i) {
 }
 
 // Upload image
-async function uploadImage(i) {
+let newImageUrl = ""; // stores the uploaded image for new entry
+
+async function uploadNewImage() {
   const fileInput = document.createElement("input");
   fileInput.type = "file";
   fileInput.accept = "image/*";
@@ -168,9 +219,6 @@ async function uploadImage(i) {
     const file = e.target.files[0];
     if (!file) return;
 
-    entries[i].uploading = true;
-    entries = [...entries];
-
     try {
       const storage = getStorage(app);
       const storageRef = ref(storage, `sym_img/${Date.now()}_${file.name}`);
@@ -178,15 +226,11 @@ async function uploadImage(i) {
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
 
-      entries[i].sym_img = url;
-      entries = [...entries];
-
-      await updateDoc(doc(db, "catalog", entries[i].id), { sym_img: url });
+      newImageUrl = url;
+      alert("Image uploaded successfully!");
     } catch (err) {
       console.error("Upload failed:", err);
-    } finally {
-      entries[i].uploading = false;
-      entries = [...entries];
+      alert("Upload failed: " + err.message);
     }
   };
 
@@ -201,7 +245,6 @@ function logout() {
 }
 </script>
 
-<!-- UI -->
 <div class="catalog-container">
  <h1>ADMIN CATALOG</h1>
  <div class="button-group">
@@ -212,11 +255,17 @@ function logout() {
 </div>
 
 <div class="catalog-component-box">
-<input type="text" class="component-name-input" placeholder="Component Name..." bind:value={componentName}/>
+<input type="text" class="component-name-input" placeholder="Component Id..." bind:value={componentId}/>
+
 <input type="text" class="discovered-input" placeholder="Discovered by..." bind:value={discoveredBy}/>
 <input type="text" class="discovery-input" placeholder="Year of discovery..." bind:value={discoveryYear}/>
 <input type="text" class="category-input" placeholder="Category..." bind:value={category}/>
-<button class="add-button" on:click={addEntry}>ADD</button>
+
+ <button class="upload-image-button" on:click={uploadNewImage}>
+    <img src="/add.svg" alt="Upload Image" class="icon-btn" />
+  </button>
+
+  <button class="add-button" on:click={addEntry}>ADD</button>
 </div>
 
 <div class="title">
@@ -227,11 +276,19 @@ function logout() {
 {#each entries as entry, i}
   <div class="catalog-entry-box">
     {#if entry.editing}
-<input class="name_edit" placeholder="Component Name..." bind:value={entry.name} on:input={() => (entries=[...entries])}/>
+
+<input
+  class="name_edit"
+  value={entry.id}
+  disabled
+/>
+
 <input class="discovered_edit" placeholder="Discovered by..." bind:value={entry.discovered} on:input={() => (entries=[...entries])}/>
 <input class="discovery_edit" placeholder="Year..." bind:value={entry.year} on:input={() => (entries=[...entries])}/>
 <input class="category_edit" placeholder="Category..." bind:value={entry.category} on:input={() => (entries=[...entries])}/>
-<button class="save_button" on:click={() => saveEntry(i)}>Save</button>
+
+<button class="save-button" on:click={() => saveEditedEntry(i)}>Save</button>
+
 
     {:else}
       <div class="name-entry">{entry.name}</div>
@@ -244,9 +301,11 @@ function logout() {
       </div>
       <div class="row-actions">
 <div class="row-actions">
-  <button class="img_path_input" on:click={() => uploadImage(i)}>
-    <img src="/add.svg" alt="Upload" class="icon-btn" />
+
+ <button class="upload-image-button" on:click={uploadNewImage}>
+    <img src="/add.svg" alt="Upload Image" class="icon-btn" />
   </button>
+
   <button class="edit_button_input" on:click={() => editEntry(i)}>
     <img src="/write.svg" alt="Edit" class="icon-btn" />
   </button>
@@ -423,8 +482,15 @@ function logout() {
   font-size: 16px;
 }
 
-
-  .add-button,.save_button{
+.upload-image-button{
+    background-color: #0b0805;
+    border-radius: 10px;
+    max-width: 500px;
+    padding: 6px 10px;
+    border: solid #3E92B5 2px ;
+    
+  }
+  .add-button,.save-button{
     background-color: #CF8C44;
     color: #fff;
     border-radius: 10px;
@@ -433,7 +499,7 @@ function logout() {
     border: none;
     font-size: 16px;
   }
-.img_path_input,
+
 .edit_button_input,
 .delete_button_input {
   background-color: #000;
@@ -448,12 +514,12 @@ function logout() {
 }
 
 .icon-btn {
-  
+  color: #CF8C44;
   width: 30px;
   height: 30px;
   pointer-events: none; /* So clicks go to the button, not the img */
 }
-.img_path_input,
+
 .edit_button_input,
 .delete_button_input {
   display: flex;

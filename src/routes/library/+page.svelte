@@ -241,7 +241,7 @@ function logout() {
     {entry.description}
 
   </div>
-
+`
   <div class="row-actions">
     <button class="img_path_input" on:click={() => uploadImage (i)}><img src="/add.svg" alt="img_path" class="imgpath" /></button>
     <button class="edit_button_input" on:click={() => editEntry(i)}><img src="/write.svg" alt="edit" class="edit" /></button>
@@ -252,7 +252,7 @@ function logout() {
 {/if}
 </div>
 {/each}
-
+`
 
 <style>
 
